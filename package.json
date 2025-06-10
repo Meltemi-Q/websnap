@@ -14,16 +14,19 @@
     "test:memory": "node test-memory-optimization.js",
     "test:hobby": "node test-hobby-plan.js",
     "test:problems": "node test-hobby-plan.js",
+    "test:step": "node test-step-by-step.js",
     "verify": "node verify-deployment.js",
+    "check": "node deploy-ready-check.js",
     "deploy": "vercel --prod",
-    "deploy:safe": "npm run verify && npm run deploy",
+    "deploy:safe": "npm run check && npm run deploy",
     "deploy:hobby": "npm run plan:hobby && npm run deploy",
-    "deploy:pro": "npm run plan:pro && npm run deploy"
+    "deploy:pro": "npm run plan:pro && npm run deploy",
+    "test:prod": "node test-production-deployment.js"
   },
   "dependencies": {
-    "@sparticuz/chromium": "^121.0.0",
+    "@sparticuz/chromium": "^123.0.1",
     "express": "^4.18.2",
-    "puppeteer-core": "^21.0.0"
+    "puppeteer-core": "^22.6.4"
   },
   "engines": {
     "node": "18.x"
