@@ -1,0 +1,11 @@
+{
+  "name": "websnap",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node api/screenshot.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "puppeteer": "^20.0.0"
+  }
+}
