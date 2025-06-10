@@ -1,6 +1,6 @@
 # WebSnap - 网址转长图工具
 
-[![Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-username/websnap)
+[![Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Meltemi-Q/websnap)
 
 WebSnap 是一个开源的网页截图工具，能够将任何网址转换为高质量的长截图。采用极简苹果风格设计，提供直观的用户体验。
 
