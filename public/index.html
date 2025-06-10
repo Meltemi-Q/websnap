@@ -236,6 +236,66 @@
             color: #777;
         }
 
+        .error-section {
+            display: none;
+            padding: 30px 40px;
+            background: #fff5f5;
+            border-left: 4px solid #e53e3e;
+            margin: 20px 0;
+        }
+
+        .error-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .error-header i {
+            color: #e53e3e;
+            font-size: 24px;
+            margin-right: 12px;
+        }
+
+        .error-header h3 {
+            color: #e53e3e;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .error-message {
+            color: #333;
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 10px;
+        }
+
+        .error-tip {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.4;
+            background: #f7fafc;
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 3px solid #4299e1;
+        }
+
+        .retry-btn {
+            background: #6e8efb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: all 0.2s ease;
+        }
+
+        .retry-btn:hover {
+            background: #5d7df0;
+        }
+
         footer {
             text-align: center;
             padding: 30px 0;
@@ -302,7 +362,17 @@
             <div class="spinner"></div>
             <p>正在生成截图，请稍候...</p>
         </section>
-        
+
+        <section class="error-section" id="error-section">
+            <div class="error-header">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>截图生成失败</h3>
+            </div>
+            <div class="error-message" id="error-message"></div>
+            <div class="error-tip" id="error-tip"></div>
+            <button class="retry-btn" id="retry-btn">重新尝试</button>
+        </section>
+
         <section class="result-section" id="result-section">
             <div class="result-header">
                 <h2>生成结果</h2>
@@ -332,42 +402,110 @@
             const deviceSelect = document.getElementById('device-select');
             const qualitySelect = document.getElementById('quality-select');
             const loadingSection = document.getElementById('loading-section');
+            const errorSection = document.getElementById('error-section');
+            const errorMessage = document.getElementById('error-message');
+            const errorTip = document.getElementById('error-tip');
+            const retryBtn = document.getElementById('retry-btn');
             const resultSection = document.getElementById('result-section');
             const screenshotContainer = document.getElementById('screenshot-container');
             const downloadBtn = document.getElementById('download-btn');
             const newBtn = document.getElementById('new-btn');
             
             let generatedImage = null;
-            
+
+            // 显示错误的函数
+            function showError(message, tip = '') {
+                loadingSection.style.display = 'none';
+                resultSection.style.display = 'none';
+                errorSection.style.display = 'block';
+                errorMessage.textContent = message;
+                errorTip.textContent = tip;
+                errorTip.style.display = tip ? 'block' : 'none';
+            }
+
+            // 隐藏错误的函数
+            function hideError() {
+                errorSection.style.display = 'none';
+            }
+
+            // 重试按钮事件
+            retryBtn.addEventListener('click', function() {
+                hideError();
+                generateBtn.click();
+            });
+
+            // URL自动补全函数
+            function normalizeUrl(inputUrl) {
+                if (!inputUrl || typeof inputUrl !== 'string') {
+                    return null;
+                }
+
+                let url = inputUrl.trim();
+
+                // 如果没有协议，自动添加https://
+                if (!url.match(/^https?:\/\//i)) {
+                    url = 'https://' + url;
+                }
+
+                try {
+                    // 验证URL格式
+                    const urlObj = new URL(url);
+                    return urlObj.href;
+                } catch (e) {
+                    // 如果https失败，尝试http
+                    if (url.startsWith('https://')) {
+                        try {
+                            const httpUrl = url.replace('https://', 'http://');
+                            const urlObj = new URL(httpUrl);
+                            return urlObj.href;
+                        } catch (e2) {
+                            return null;
+                        }
+                    }
+                    return null;
+                }
+            }
+
             generateBtn.addEventListener('click', async function() {
-                const url = urlInput.value.trim();
-                
-                if (!url) {
+                const inputUrl = urlInput.value.trim();
+
+                if (!inputUrl) {
                     alert('请输入有效的URL');
                     return;
                 }
-                
-                // 验证URL格式
-                try {
-                    new URL(url);
-                } catch (e) {
-                    alert('请输入有效的URL（包含http://或https://）');
+
+                // URL自动补全和验证
+                const url = normalizeUrl(inputUrl);
+                if (!url) {
+                    alert('请输入有效的URL，如：example.com 或 https://example.com');
                     return;
+                }
+
+                // 如果URL被自动补全，更新输入框显示
+                if (url !== inputUrl) {
+                    urlInput.value = url;
+                    console.log(`URL自动补全: ${inputUrl} -> ${url}`);
                 }
                 
                 // 显示加载状态
                 loadingSection.style.display = 'block';
                 resultSection.style.display = 'none';
+                hideError();
                 generateBtn.disabled = true;
                 
                 try {
                     // 获取设备设置
                     const device = deviceSelect.value;
-                    
+
                     // 获取质量设置
                     const quality = qualitySelect.value;
-                    
-                    // 调用后端API
+
+                    console.log('开始截图请求:', { url, device, quality });
+
+                    // 调用后端API，增加超时控制
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2分钟超时
+
                     const response = await fetch('/api/screenshot', {
                         method: 'POST',
                         headers: {
@@ -377,31 +515,65 @@
                             url: url,
                             device: device,
                             quality: quality
-                        })
+                        }),
+                        signal: controller.signal
                     });
-                    
+
+                    clearTimeout(timeoutId);
+
                     if (!response.ok) {
-                        const errorData = await response.json();
+                        let errorData;
+                        try {
+                            errorData = await response.json();
+                        } catch (e) {
+                            throw new Error(`服务器错误 (${response.status}): ${response.statusText}`);
+                        }
                         throw new Error(errorData.error || `截图生成失败: ${response.statusText}`);
                     }
-                    
+
                     const result = await response.json();
-                    
+                    console.log('截图请求成功:', result.metadata);
+
                     if (!result.success) {
                         throw new Error(result.error || '截图生成失败');
                     }
-                    
+
                     // 显示结果
                     loadingSection.style.display = 'none';
                     resultSection.style.display = 'block';
-                    
+
                     // 显示截图
                     screenshotContainer.innerHTML = `<img src="${result.image}" alt="网页截图" id="screenshot-image">`;
                     generatedImage = result.image;
+
+                    // 显示成功信息
+                    if (result.metadata) {
+                        console.log(`截图生成成功，耗时: ${result.metadata.duration}ms`);
+                    }
+
                 } catch (error) {
-                    console.error('Error:', error);
-                    loadingSection.style.display = 'none';
-                    alert(`生成截图时出错: ${error.message}`);
+                    console.error('截图生成错误:', error);
+
+                    let message = error.message;
+                    let tip = '';
+
+                    if (error.name === 'AbortError') {
+                        message = '请求超时';
+                        tip = '网页加载时间过长，请稍后重试或尝试其他网址';
+                    } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                        message = '网络连接失败';
+                        tip = '请检查网络连接是否正常';
+                    } else if (error.message.includes('页面加载超时')) {
+                        tip = '目标网页响应较慢，请稍后重试';
+                    } else if (error.message.includes('无法访问目标网页')) {
+                        tip = '请检查网址是否正确';
+                    } else if (error.message.includes('浏览器初始化失败')) {
+                        tip = '服务器繁忙，请稍后重试';
+                    } else if (error.message.includes('浏览器连接异常')) {
+                        tip = '服务器繁忙，请稍后重试';
+                    }
+
+                    showError(message, tip);
                 } finally {
                     generateBtn.disabled = false;
                 }
@@ -425,6 +597,7 @@
                 urlInput.value = '';
                 urlInput.focus();
                 resultSection.style.display = 'none';
+                hideError();
                 screenshotContainer.innerHTML = `
                     <div class="placeholder">
                         <i class="fas fa-image"></i>

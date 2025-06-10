@@ -6,7 +6,8 @@
       "config": {
         "includeFiles": [
           "node_modules/@sparticuz/chromium/**"
-        ]
+        ],
+        "maxLambdaSize": "50mb"
       }
     },
     {
@@ -18,6 +19,11 @@
     {
       "src": "/api/screenshot",
       "methods": ["POST"],
+      "dest": "/api/screenshot.js"
+    },
+    {
+      "src": "/api/health",
+      "methods": ["GET"],
       "dest": "/api/screenshot.js"
     },
     {
@@ -38,6 +44,11 @@
       "dest": "/public/index.html"
     }
   ],
+  "functions": {
+    "api/screenshot.js": {
+      "maxDuration": 120
+    }
+  },
   "env": {
     "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
   }
