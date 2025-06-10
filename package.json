@@ -21,7 +21,10 @@
     "deploy:safe": "npm run check && npm run deploy",
     "deploy:hobby": "npm run plan:hobby && npm run deploy",
     "deploy:pro": "npm run plan:pro && npm run deploy",
-    "test:prod": "node test-production-deployment.js"
+    "test:prod": "node test-production-deployment.js",
+    "test:solid": "node test-solid-api.js",
+    "deploy:solid": "node deploy-solid-solution.js && vercel --prod",
+    "verify:solid": "node test-solid-api.js"
   },
   "dependencies": {
     "@sparticuz/chromium": "^123.0.1",
@@ -31,7 +34,12 @@
   "engines": {
     "node": "18.x"
   },
-  "keywords": ["screenshot", "puppeteer", "websnap", "webpage"],
+  "keywords": [
+    "screenshot",
+    "puppeteer",
+    "websnap",
+    "webpage"
+  ],
   "author": "WebSnap Team",
   "license": "MIT"
 }

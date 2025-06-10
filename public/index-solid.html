@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSnap - 网址转长图工具 (SolidJS优化版)</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📷</text></svg>">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 40px;
+            text-align: center;
+            position: relative;
+        }
+
+        .version-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+        }
+
+        header h1 {
+            font-weight: 700;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+
+        header p {
+            opacity: 0.95;
+            font-weight: 300;
+            font-size: 1.1rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .input-section {
+            padding: 40px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .input-group {
+            display: flex;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 18px 25px;
+            font-size: 16px;
+            border: none;
+            outline: none;
+            background: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+
+        .input-group input:focus {
+            background: white;
+            box-shadow: inset 0 0 0 2px #667eea;
+        }
+
+        .input-group button {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 0 30px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+
+        .input-group button:hover:not(:disabled) {
+            background: linear-gradient(135deg, #5a6fd8, #6a42a0);
+            transform: translateY(-1px);
+        }
+
+        .input-group button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .options {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 25px;
+        }
+
+        .option {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .option:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+        }
+
+        .option label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .option select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            font-size: 15px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+
+        .option select:focus {
+            border-color: #667eea;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 50px;
+            background: #f8f9fa;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #e9ecef;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading h3 {
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+        }
+
+        .loading p {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+
+        .result-section {
+            padding: 40px;
+            display: none;
+        }
+
+        .result-section.show {
+            display: block;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .result-header h2 {
+            font-weight: 700;
+            font-size: 1.6rem;
+            color: #2c3e50;
+        }
+
+        .result-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: #495057;
+        }
+
+        .action-btn:hover {
+            background: #e9ecef;
+            border-color: #ced4da;
+            transform: translateY(-2px);
+        }
+
+        .action-btn.download {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-color: transparent;
+        }
+
+        .action-btn.download:hover {
+            background: linear-gradient(135deg, #5a6fd8, #6a42a0);
+        }
+
+        #screenshot-container {
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-top: 25px;
+            background: #f8f9fa;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #screenshot-container img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 20px;
+        }
+
+        .placeholder {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .placeholder i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .placeholder h3 {
+            font-size: 1.3rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .error-section {
+            display: none;
+            padding: 40px;
+            background: #fff5f5;
+            border-left: 5px solid #f56565;
+            margin: 20px;
+            border-radius: 10px;
+        }
+
+        .error-section.show {
+            display: block;
+        }
+
+        .error-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .error-icon {
+            color: #f56565;
+            font-size: 1.5rem;
+            margin-right: 10px;
+        }
+
+        .error-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #c53030;
+        }
+
+        .error-message {
+            color: #4a5568;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+
+        .error-tip {
+            color: #718096;
+            font-size: 0.9rem;
+            font-style: italic;
+        }
+
+        .retry-btn {
+            background: #f56565;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 15px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .retry-btn:hover {
+            background: #e53e3e;
+            transform: translateY(-1px);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+            }
+            
+            header {
+                padding: 30px 20px;
+            }
+            
+            header h1 {
+                font-size: 2rem;
+            }
+            
+            .input-section {
+                padding: 30px 20px;
+            }
+            
+            .input-group {
+                flex-direction: column;
+            }
+            
+            .input-group button {
+                margin-top: 10px;
+            }
+            
+            .options {
+                grid-template-columns: 1fr;
+            }
+            
+            .result-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .result-actions {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="version-badge">SolidJS v1.0</div>
+            <h1><i class="fas fa-camera"></i> WebSnap</h1>
+            <p>高性能网址转长图工具 - 支持全页面截图，解决inpage.js错误，优化用户体验</p>
+        </header>
+
+        <div class="input-section">
+            <div class="input-group">
+                <input type="url" id="url-input" placeholder="请输入网址，如：github.com 或 https://example.com" autocomplete="url">
+                <button id="generate-btn">
+                    <i class="fas fa-magic"></i> 生成截图
+                </button>
+            </div>
+
+            <div class="options">
+                <div class="option">
+                    <label for="device-select"><i class="fas fa-desktop"></i> 设备类型</label>
+                    <select id="device-select">
+                        <option value="desktop">桌面 (1920x1080)</option>
+                        <option value="tablet">平板 (768x1024)</option>
+                        <option value="mobile">手机 (375x812)</option>
+                    </select>
+                </div>
+
+                <div class="option">
+                    <label for="quality-select"><i class="fas fa-image"></i> 图片质量</label>
+                    <select id="quality-select">
+                        <option value="high">高质量 (95%)</option>
+                        <option value="medium" selected>中等质量 (80%)</option>
+                        <option value="low">低质量 (60%)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="loading" id="loading-section">
+            <div class="loading-spinner"></div>
+            <h3>正在生成截图...</h3>
+            <p>请稍候，我们正在为您处理网页截图</p>
+        </div>
+
+        <div class="error-section" id="error-section">
+            <div class="error-header">
+                <i class="fas fa-exclamation-triangle error-icon"></i>
+                <div class="error-title">截图生成失败</div>
+            </div>
+            <div class="error-message" id="error-message"></div>
+            <div class="error-tip" id="error-tip"></div>
+            <button class="retry-btn" id="retry-btn">
+                <i class="fas fa-redo"></i> 重试
+            </button>
+        </div>
+
+        <div class="result-section" id="result-section">
+            <div class="result-header">
+                <h2><i class="fas fa-check-circle" style="color: #28a745;"></i> 截图生成成功</h2>
+                <div class="result-actions">
+                    <button class="action-btn download" id="download-btn">
+                        <i class="fas fa-download"></i> 下载图片
+                    </button>
+                    <button class="action-btn" id="new-btn">
+                        <i class="fas fa-plus"></i> 新建截图
+                    </button>
+                </div>
+            </div>
+
+            <div id="screenshot-container">
+                <div class="placeholder">
+                    <i class="fas fa-image"></i>
+                    <h3>截图将在这里显示</h3>
+                    <p>生成完成后，您将看到完整的网页长图预览</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 防止inpage.js错误的预处理脚本
+        (function() {
+            if (window.ethereum) {
+                console.log('检测到区块链扩展，已屏蔽以防止inpage.js错误');
+                delete window.ethereum;
+            }
+            
+            Object.defineProperty(window, 'ethereum', {
+                get: () => undefined,
+                set: () => {},
+                configurable: false
+            });
+        })();
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlInput = document.getElementById('url-input');
+            const generateBtn = document.getElementById('generate-btn');
+            const deviceSelect = document.getElementById('device-select');
+            const qualitySelect = document.getElementById('quality-select');
+            const loadingSection = document.getElementById('loading-section');
+            const resultSection = document.getElementById('result-section');
+            const errorSection = document.getElementById('error-section');
+            const errorMessage = document.getElementById('error-message');
+            const errorTip = document.getElementById('error-tip');
+            const retryBtn = document.getElementById('retry-btn');
+            const screenshotContainer = document.getElementById('screenshot-container');
+            const downloadBtn = document.getElementById('download-btn');
+            const newBtn = document.getElementById('new-btn');
+
+            let generatedImage = null;
+
+            function showLoading() {
+                loadingSection.classList.add('show');
+                resultSection.classList.remove('show');
+                errorSection.classList.remove('show');
+            }
+
+            function showResult() {
+                loadingSection.classList.remove('show');
+                resultSection.classList.add('show');
+                errorSection.classList.remove('show');
+            }
+
+            function showError(message, tip = '') {
+                loadingSection.classList.remove('show');
+                resultSection.classList.remove('show');
+                errorSection.classList.add('show');
+                errorMessage.textContent = message;
+                errorTip.textContent = tip;
+                errorTip.style.display = tip ? 'block' : 'none';
+            }
+
+            function normalizeUrl(inputUrl) {
+                if (!inputUrl || typeof inputUrl !== 'string') {
+                    return null;
+                }
+
+                let url = inputUrl.trim();
+                url = url.replace(/[<>"{}|\\^`\[\]]/g, '');
+
+                if (!url.match(/^https?:\/\//i)) {
+                    url = 'https://' + url;
+                }
+
+                try {
+                    const urlObj = new URL(url);
+                    if (!urlObj.hostname || urlObj.hostname.length < 3) {
+                        return null;
+                    }
+                    return urlObj.href;
+                } catch (e) {
+                    if (url.startsWith('https://')) {
+                        try {
+                            const httpUrl = url.replace('https://', 'http://');
+                            const urlObj = new URL(httpUrl);
+                            return urlObj.href;
+                        } catch (e2) {
+                            return null;
+                        }
+                    }
+                    return null;
+                }
+            }
+
+            generateBtn.addEventListener('click', async function() {
+                const inputUrl = urlInput.value.trim();
+
+                if (!inputUrl) {
+                    urlInput.focus();
+                    urlInput.style.boxShadow = 'inset 0 0 0 2px #f56565';
+                    setTimeout(() => {
+                        urlInput.style.boxShadow = '';
+                    }, 2000);
+                    return;
+                }
+
+                const url = normalizeUrl(inputUrl);
+                if (!url) {
+                    showError('URL格式无效', '请输入有效的网址，如：example.com 或 https://example.com');
+                    return;
+                }
+
+                if (url !== inputUrl) {
+                    urlInput.value = url;
+                    console.log(`URL已标准化: ${inputUrl} -> ${url}`);
+                }
+
+                showLoading();
+                generateBtn.disabled = true;
+
+                try {
+                    const device = deviceSelect.value;
+                    const quality = qualitySelect.value;
+
+                    console.log('开始截图请求:', { url, device, quality });
+
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => {
+                        controller.abort();
+                    }, 120000);
+
+                    const response = await fetch('/api/screenshot', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            url: url,
+                            device: device,
+                            quality: quality
+                        }),
+                        signal: controller.signal
+                    });
+
+                    clearTimeout(timeoutId);
+
+                    if (!response.ok) {
+                        let errorData;
+                        try {
+                            errorData = await response.json();
+                        } catch (e) {
+                            throw new Error(`服务器错误 (${response.status}): ${response.statusText}`);
+                        }
+                        throw new Error(errorData.error || errorData.message || `截图生成失败: ${response.statusText}`);
+                    }
+
+                    const result = await response.json();
+                    console.log('截图请求成功:', result.metadata);
+
+                    if (!result.success || !result.image) {
+                        throw new Error(result.error || result.message || '截图生成失败');
+                    }
+
+                    showResult();
+                    generatedImage = result.image;
+
+                    const img = document.createElement('img');
+                    img.src = result.image;
+                    img.alt = '网页截图';
+                    img.style.maxWidth = '100%';
+                    img.style.height = 'auto';
+                    img.style.borderRadius = '20px';
+
+                    screenshotContainer.innerHTML = '';
+                    screenshotContainer.appendChild(img);
+
+                    console.log(`截图生成成功! 耗时: ${result.metadata?.duration || 'N/A'}ms`);
+
+                } catch (error) {
+                    console.error('截图生成错误:', error);
+
+                    let message = '截图生成失败';
+                    let tip = '';
+
+                    if (error.name === 'AbortError') {
+                        message = '请求超时';
+                        tip = '网页加载时间过长，请稍后重试或尝试其他网址';
+                    } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                        message = '网络连接失败';
+                        tip = '请检查网络连接是否正常，然后重试';
+                    } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+                        message = '页面加载超时';
+                        tip = '目标网页响应较慢，请稍后重试或尝试其他网址';
+                    } else {
+                        message = error.message || '未知错误';
+                        tip = '请稍后重试，如果问题持续存在，请联系技术支持';
+                    }
+
+                    showError(message, tip);
+                } finally {
+                    generateBtn.disabled = false;
+                }
+            });
+
+            retryBtn.addEventListener('click', function() {
+                generateBtn.click();
+            });
+
+            downloadBtn.addEventListener('click', function() {
+                if (!generatedImage) {
+                    alert('请先生成截图');
+                    return;
+                }
+
+                try {
+                    const link = document.createElement('a');
+                    link.href = generatedImage;
+                    
+                    const url = new URL(urlInput.value);
+                    const hostname = url.hostname.replace(/[^a-zA-Z0-9]/g, '_');
+                    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
+                    link.download = `websnap_${hostname}_${timestamp}.jpg`;
+                    
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    console.log('截图下载完成');
+                } catch (error) {
+                    console.error('下载失败:', error);
+                    alert('下载失败，请重试');
+                }
+            });
+
+            newBtn.addEventListener('click', function() {
+                urlInput.value = '';
+                urlInput.focus();
+                loadingSection.classList.remove('show');
+                resultSection.classList.remove('show');
+                errorSection.classList.remove('show');
+                screenshotContainer.innerHTML = `
+                    <div class="placeholder">
+                        <i class="fas fa-image"></i>
+                        <h3>截图将在这里显示</h3>
+                        <p>生成完成后，您将看到完整的网页长图预览</p>
+                    </div>
+                `;
+                generatedImage = null;
+            });
+
+            urlInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    generateBtn.click();
+                }
+            });
+
+            urlInput.focus();
+            console.log('WebSnap SolidJS版本已加载，inpage.js错误已被防护');
+        });
+    </script>
+</body>
+</html>
