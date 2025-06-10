@@ -7,7 +7,13 @@
     "start": "node api/screenshot.js",
     "test": "node api/screenshot.js",
     "dev": "node api/screenshot.js",
-    "vercel-build": "echo 'Vercel build script: no build needed'"
+    "vercel-build": "echo 'Vercel build script: no build needed'",
+    "plan:status": "node switch-plan.js status",
+    "plan:hobby": "node switch-plan.js hobby",
+    "plan:pro": "node switch-plan.js pro",
+    "deploy": "vercel --prod",
+    "deploy:hobby": "npm run plan:hobby && npm run deploy",
+    "deploy:pro": "npm run plan:pro && npm run deploy"
   },
   "dependencies": {
     "@sparticuz/chromium": "^121.0.0",

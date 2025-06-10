@@ -27,6 +27,41 @@ chromium.setGraphicsMode = false; // 禁用图形模式
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
+// 智能超时配置系统
+function getTimeoutConfig(url) {
+  const isVercel = process.env.VERCEL === '1';
+  const vercelPlan = process.env.VERCEL_PLAN || 'hobby'; // hobby, pro, enterprise
+  const isTargetSite = url.includes('islanddragon.cn');
+
+  // 基础配置
+  const config = {
+    // Vercel函数执行时间限制（留5秒缓冲）
+    maxExecutionTime: isVercel ? (vercelPlan === 'hobby' ? 55000 : 115000) : 120000,
+    // 页面导航超时
+    navigationTimeout: 30000,
+    // 等待策略
+    waitStrategy: 'standard',
+    // 重试次数
+    retries: 2
+  };
+
+  if (isTargetSite) {
+    if (isVercel && vercelPlan === 'hobby') {
+      // Hobby计划：优化的快速策略
+      config.navigationTimeout = 25000;
+      config.waitStrategy = 'fast-enhanced';
+      config.retries = 1;
+    } else {
+      // Pro计划或本地：完整策略
+      config.navigationTimeout = 45000;
+      config.waitStrategy = 'enhanced';
+      config.retries = 2;
+    }
+  }
+
+  return config;
+}
+
 // 静态文件服务
 app.use(express.static(path.join(__dirname, '../public')));
 
@@ -90,6 +125,157 @@ async function retryOperation(operation, maxRetries = 3, delay = 1000) {
       await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
     }
   }
+}
+
+// 快速现代前端框架等待策略（60秒限制优化版本）
+async function waitForModernFrameworkFast(page, requestId) {
+  console.log(`[${requestId}] 开始快速现代前端框架检测`);
+
+  // 检测框架类型
+  const frameworkInfo = await page.evaluate(() => {
+    const frameworks = {
+      nextjs: !!(window.__NEXT_DATA__ || window.next || document.querySelector('#__next')),
+      react: !!(window.React || document.querySelector('[data-reactroot]') || document.querySelector('#__next')),
+      vue: !!(window.Vue || document.querySelector('[data-v-]')),
+      angular: !!(window.ng || document.querySelector('[ng-version]'))
+    };
+
+    return {
+      frameworks,
+      hasFramework: Object.values(frameworks).some(Boolean),
+      isNextJS: frameworks.nextjs,
+      isReact: frameworks.react
+    };
+  });
+
+  console.log(`[${requestId}] 快速框架检测结果:`, frameworkInfo);
+
+  if (frameworkInfo.hasFramework) {
+    console.log(`[${requestId}] 检测到现代前端框架，使用快速等待策略`);
+
+    // 针对Next.js的快速处理
+    if (frameworkInfo.isNextJS) {
+      console.log(`[${requestId}] 检测到Next.js应用，使用快速等待策略`);
+      await waitForNextJSHydrationFast(page, requestId);
+    } else {
+      console.log(`[${requestId}] 等待其他框架快速水合`);
+      await page.waitForFunction(() => {
+        return document.readyState === 'complete';
+      }, { timeout: 10000 }).catch(() => {
+        console.log(`[${requestId}] 快速水合等待超时`);
+      });
+    }
+
+    // 快速等待动态内容
+    await waitForDynamicContentFast(page, requestId);
+
+    // 快速等待关键资源
+    await waitForAssetsFast(page, requestId);
+
+    return true;
+  }
+
+  return false;
+}
+
+// 快速Next.js水合等待
+async function waitForNextJSHydrationFast(page, requestId) {
+  console.log(`[${requestId}] 开始Next.js快速水合等待`);
+
+  const currentUrl = await page.url();
+  const isTargetSite = currentUrl.includes('islanddragon.cn');
+
+  // 第一阶段：等待基础DOM结构（缩短时间）
+  await page.waitForFunction(() => {
+    return document.readyState === 'complete' &&
+           document.querySelector('#__next') &&
+           document.querySelector('#__next').children.length > 0;
+  }, { timeout: 8000 }).catch(() => {
+    console.log(`[${requestId}] Next.js DOM结构快速等待超时`);
+  });
+
+  // 第二阶段：快速水合检查
+  await page.waitForFunction(() => {
+    const hasLoadingStates = !!document.querySelector('[data-loading]') ||
+                            !!document.querySelector('.loading') ||
+                            !!document.querySelector('[aria-busy="true"]');
+
+    const reactRoot = document.querySelector('#__next');
+    const hasReactComponents = reactRoot && reactRoot.querySelector('[data-reactroot], [data-react-root]');
+
+    return !hasLoadingStates && (hasReactComponents || !window.__NEXT_DATA__);
+  }, { timeout: 12000 }).catch(() => {
+    console.log(`[${requestId}] Next.js快速水合等待超时，继续执行`);
+  });
+
+  // 第三阶段：针对目标网站的快速等待
+  if (isTargetSite) {
+    console.log(`[${requestId}] 目标网站快速渲染等待`);
+
+    await page.waitForFunction(() => {
+      const hasLayout = document.querySelector('header, nav') &&
+                       document.querySelector('main, [role="main"]') &&
+                       document.querySelector('h1');
+
+      const hasTailwindClasses = !!document.querySelector('[class*="bg-"], [class*="text-"]');
+
+      return hasLayout && hasTailwindClasses;
+    }, { timeout: 10000 }).catch(() => {
+      console.log(`[${requestId}] 目标网站快速组件渲染等待超时`);
+    });
+
+    // 减少额外等待时间
+    await page.waitForTimeout(2000);
+  } else {
+    await page.waitForTimeout(1500);
+  }
+
+  console.log(`[${requestId}] Next.js快速水合等待完成`);
+}
+
+// 快速动态内容等待
+async function waitForDynamicContentFast(page, requestId) {
+  console.log(`[${requestId}] 快速等待动态内容加载`);
+
+  const currentUrl = await page.url();
+  const isTargetSite = currentUrl.includes('islanddragon.cn');
+
+  if (isTargetSite) {
+    // 快速滚动策略
+    await page.evaluate(async () => {
+      const scrollHeight = Math.max(
+        document.body.scrollHeight,
+        document.documentElement.scrollHeight
+      );
+
+      const steps = 5; // 减少步骤
+      const stepHeight = scrollHeight / steps;
+
+      for (let i = 0; i <= steps; i++) {
+        window.scrollTo(0, stepHeight * i);
+        await new Promise(resolve => setTimeout(resolve, 100)); // 减少等待时间
+      }
+
+      window.scrollTo(0, 0);
+    });
+
+    await page.waitForTimeout(500);
+  } else {
+    await page.waitForTimeout(300);
+  }
+}
+
+// 快速资源等待
+async function waitForAssetsFast(page, requestId) {
+  console.log(`[${requestId}] 快速等待关键资源`);
+
+  await page.waitForFunction(() => {
+    const images = Array.from(document.images);
+    const criticalImages = images.slice(0, 5); // 只等待前5张图片
+    return criticalImages.every(img => img.complete && img.naturalHeight !== 0);
+  }, { timeout: 8000 }).catch(() => {
+    console.log(`[${requestId}] 快速图片加载等待超时`);
+  });
 }
 
 // 现代前端框架检测和等待策略
@@ -712,15 +898,29 @@ app.post('/api/screenshot', async (req, res) => {
 
   console.log(`[${requestId}] URL格式化: ${inputUrl} -> ${url}`);
 
+  // 获取智能超时配置
+  const timeoutConfig = getTimeoutConfig(url);
+  console.log(`[${requestId}] 超时配置:`, timeoutConfig);
+
+  // 设置总体执行时间限制
+  const executionTimer = setTimeout(() => {
+    console.log(`[${requestId}] 执行时间超限，强制终止`);
+    if (browser) {
+      browser.close().catch(() => {});
+    }
+  }, timeoutConfig.maxExecutionTime);
+
   // 验证设备类型
   if (!deviceProfiles[device]) {
     console.log(`[${requestId}] 设备类型验证失败:`, device);
+    clearTimeout(executionTimer);
     return res.status(400).json({ error: '无效的设备类型' });
   }
 
   // 验证质量设置
   if (!qualitySettings[quality]) {
     console.log(`[${requestId}] 质量设置验证失败:`, quality);
+    clearTimeout(executionTimer);
     return res.status(400).json({ error: '无效的质量设置' });
   }
 
@@ -856,36 +1056,42 @@ app.post('/api/screenshot', async (req, res) => {
       }
     });
 
-    // 针对不同网站使用不同的超时策略
-    const isTargetSite = url.includes('islanddragon.cn');
-    const navigationTimeout = isTargetSite ? 120000 : 80000; // 目标网站使用更长超时
-    const retryCount = isTargetSite ? 3 : 2;
-    const retryDelay = isTargetSite ? 5000 : 3000;
-
-    console.log(`[${requestId}] 使用导航超时: ${navigationTimeout}ms, 重试次数: ${retryCount}`);
+    // 使用智能超时配置
+    console.log(`[${requestId}] 使用导航超时: ${timeoutConfig.navigationTimeout}ms, 重试次数: ${timeoutConfig.retries}`);
 
     await retryOperation(async () => {
       await page.goto(url, {
         waitUntil: ['networkidle2', 'domcontentloaded'],
-        timeout: navigationTimeout
+        timeout: timeoutConfig.navigationTimeout
       });
-    }, retryCount, retryDelay);
+    }, timeoutConfig.retries, 3000);
 
-    console.log(`[${requestId}] 页面初始加载完成，开始现代前端框架检测`);
+    console.log(`[${requestId}] 页面初始加载完成，开始智能等待策略: ${timeoutConfig.waitStrategy}`);
 
-    // 使用现代前端框架等待策略
-    const hasModernFramework = await waitForModernFramework(page, requestId);
+    // 根据配置使用不同的等待策略
+    let hasModernFramework = false;
+
+    if (timeoutConfig.waitStrategy === 'enhanced') {
+      // 完整的现代前端框架等待策略
+      hasModernFramework = await waitForModernFramework(page, requestId);
+    } else if (timeoutConfig.waitStrategy === 'fast-enhanced') {
+      // 快速增强策略（60秒限制下的优化版本）
+      hasModernFramework = await waitForModernFrameworkFast(page, requestId);
+    } else {
+      // 标准策略
+      hasModernFramework = await waitForModernFramework(page, requestId);
+    }
 
     if (!hasModernFramework) {
       console.log(`[${requestId}] 未检测到现代框架，使用传统等待策略`);
       // 传统网站的等待策略
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(2000);
 
       // 等待图片加载
       await page.waitForFunction(() => {
         const images = Array.from(document.images);
         return images.every(img => img.complete);
-      }, { timeout: 10000 }).catch(() => {
+      }, { timeout: 8000 }).catch(() => {
         console.log(`[${requestId}] 图片加载等待超时`);
       });
     }
@@ -961,6 +1167,9 @@ app.post('/api/screenshot', async (req, res) => {
 
     console.log(`[${requestId}] 请求处理完成，耗时:`, duration, 'ms');
 
+    // 清除执行时间限制器
+    clearTimeout(executionTimer);
+
     // 返回结果
     res.json({
       success: true,
@@ -992,6 +1201,9 @@ app.post('/api/screenshot', async (req, res) => {
     const endTime = Date.now();
     const duration = endTime - startTime;
 
+    // 清除执行时间限制器
+    clearTimeout(executionTimer);
+
     console.error(`[${requestId}] 截图生成错误 (耗时: ${duration}ms):`, error);
     console.error(`[${requestId}] 错误堆栈:`, error.stack);
 
@@ -1001,7 +1213,11 @@ app.post('/api/screenshot', async (req, res) => {
 
     if (error.message.includes('timeout') || error.message.includes('Timeout')) {
       errorMessage = '页面加载超时';
-      errorTip = '目标网页响应较慢，请稍后重试或检查网址是否正确';
+      if (duration >= timeoutConfig.maxExecutionTime - 5000) {
+        errorTip = `当前计划限制执行时间为${Math.round(timeoutConfig.maxExecutionTime/1000)}秒，该网站需要更长时间渲染。建议升级到Pro计划以获得更长的执行时间。`;
+      } else {
+        errorTip = '目标网页响应较慢，请稍后重试或检查网址是否正确';
+      }
     } else if (error.message.includes('net::ERR_') || error.message.includes('Navigation failed')) {
       errorMessage = '无法访问目标网页';
       errorTip = '请检查网址是否正确，或目标网站是否可访问';
@@ -1018,7 +1234,12 @@ app.post('/api/screenshot', async (req, res) => {
       details: error.message,
       tip: errorTip,
       requestId,
-      duration
+      duration,
+      planInfo: {
+        currentPlan: process.env.VERCEL_PLAN || 'hobby',
+        maxExecutionTime: Math.round(timeoutConfig.maxExecutionTime/1000) + 's',
+        upgradeUrl: 'https://vercel.com/pricing'
+      }
     });
   } finally {
     if (browser) {
