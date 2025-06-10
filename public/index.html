@@ -321,7 +321,7 @@
     </div>
     
     <footer>
-        <p>© 2025 WebSnap - 网页转长图工具 | 使用简单，效果出色</p>
+        <p>© 2023 WebSnap - 网页转长图工具 | 使用简单，效果出色</p>
     </footer>
 
     <script>
@@ -380,10 +380,15 @@
                     });
                     
                     if (!response.ok) {
-                        throw new Error(`截图生成失败: ${response.statusText}`);
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `截图生成失败: ${response.statusText}`);
                     }
                     
                     const result = await response.json();
+                    
+                    if (!result.success) {
+                        throw new Error(result.error || '截图生成失败');
+                    }
                     
                     // 显示结果
                     loadingSection.style.display = 'none';
@@ -409,7 +414,7 @@
                 
                 const link = document.createElement('a');
                 link.href = generatedImage;
-                link.download = 'websnap-screenshot.png';
+                link.download = 'websnap-screenshot.jpg';
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
