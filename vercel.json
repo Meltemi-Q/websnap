@@ -1,10 +1,7 @@
 {
   "functions": {
     "api/screenshot.js": {
-      "maxDuration": 120,
-      "includeFiles": [
-        "node_modules/@sparticuz/chromium/**"
-      ]
+      "maxDuration": 30
     }
   },
   "rewrites": [
@@ -13,30 +10,8 @@
       "destination": "/api/screenshot.js"
     },
     {
-      "source": "/api/health",
+      "source": "/api/health", 
       "destination": "/api/screenshot.js"
     }
-  ],
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        },
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type"
-        }
-      ]
-    }
-  ],
-  "env": {
-    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true"
-  }
+  ]
 }
