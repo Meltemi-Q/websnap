@@ -27,45 +27,60 @@ chromium.setGraphicsMode = false; // 禁用图形模式
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// 智能超时和内存配置系统
-function getTimeoutConfig(url) {
+// Hobby 计划专用配置系统 - 专注于可靠性
+function getHobbyPlanConfig(url) {
   const isVercel = process.env.VERCEL === '1';
-  const vercelPlan = process.env.VERCEL_PLAN || 'hobby'; // hobby, pro, enterprise
-  const isTargetSite = url.includes('islanddragon.cn');
+  const isComplexSite = url.includes('islanddragon.cn') ||
+                       url.includes('qq.com') ||
+                       url.includes('baidu.com') ||
+                       url.includes('taobao.com');
 
-  // 基础配置
+  // Hobby 计划的保守配置 - 优先可靠性
   const config = {
-    // Vercel函数执行时间限制（留5秒缓冲）
-    maxExecutionTime: isVercel ? (vercelPlan === 'hobby' ? 55000 : 115000) : 120000,
-    // 页面导航超时
-    navigationTimeout: 30000,
-    // 等待策略
-    waitStrategy: 'standard',
-    // 重试次数
-    retries: 2,
+    // 执行时间限制（留10秒缓冲）
+    maxExecutionTime: isVercel ? 50000 : 120000,
+    // 导航超时 - 保守设置
+    navigationTimeout: isComplexSite ? 20000 : 15000,
+    // 页面等待时间 - 激进优化
+    pageWaitTime: isComplexSite ? 3000 : 2000,
+    // 重试次数 - 减少重试以节省时间
+    retries: 1,
     // 内存配置
     memory: {
-      limit: vercelPlan === 'hobby' ? 1024 : 3008,
-      // 内存优化策略
-      optimization: vercelPlan === 'hobby' ? 'aggressive' : 'balanced'
-    }
+      limit: 1024,
+      optimization: 'aggressive'
+    },
+    // 降级策略
+    fallbackStrategy: isComplexSite ? 'minimal' : 'standard'
   };
 
-  if (isTargetSite) {
-    if (isVercel && vercelPlan === 'hobby') {
-      // Hobby计划：优化的快速策略
-      config.navigationTimeout = 25000;
-      config.waitStrategy = 'fast-enhanced';
-      config.retries = 1;
-    } else {
-      // Pro计划或本地：完整策略
-      config.navigationTimeout = 45000;
-      config.waitStrategy = 'enhanced';
-      config.retries = 2;
-    }
-  }
-
   return config;
+}
+
+// 检测网站复杂度
+function detectSiteComplexity(url) {
+  const complexPatterns = [
+    'qq.com',
+    'baidu.com',
+    'taobao.com',
+    'tmall.com',
+    'jd.com',
+    'weibo.com',
+    'zhihu.com',
+    'bilibili.com',
+    'islanddragon.cn'
+  ];
+
+  const isComplex = complexPatterns.some(pattern => url.includes(pattern));
+  const hasQuery = url.includes('?') && url.split('?')[1].length > 50;
+  const hasFragment = url.includes('#');
+
+  return {
+    isComplex,
+    hasQuery,
+    hasFragment,
+    complexity: isComplex ? 'high' : (hasQuery || hasFragment) ? 'medium' : 'low'
+  };
 }
 
 // 内存优化的浏览器配置
@@ -245,6 +260,92 @@ async function retryOperation(operation, maxRetries = 3, delay = 1000) {
       await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
     }
   }
+}
+
+// Hobby 计划专用：极简页面等待策略
+async function waitForPageHobbyPlan(page, requestId, config, siteComplexity) {
+  console.log(`[${requestId}] 开始 Hobby 计划页面等待策略`);
+
+  try {
+    // 根据网站复杂度调整等待策略
+    if (siteComplexity.complexity === 'high') {
+      console.log(`[${requestId}] 高复杂度网站，使用最小等待策略`);
+      await waitForMinimalContent(page, requestId);
+    } else if (siteComplexity.complexity === 'medium') {
+      console.log(`[${requestId}] 中等复杂度网站，使用标准等待策略`);
+      await waitForStandardContent(page, requestId);
+    } else {
+      console.log(`[${requestId}] 简单网站，使用完整等待策略`);
+      await waitForFullContent(page, requestId);
+    }
+
+    return true;
+  } catch (error) {
+    console.log(`[${requestId}] 页面等待策略失败，继续执行: ${error.message}`);
+    return false;
+  }
+}
+
+// 最小内容等待（高复杂度网站）
+async function waitForMinimalContent(page, requestId) {
+  console.log(`[${requestId}] 最小内容等待策略`);
+
+  // 只等待基本DOM加载
+  await page.waitForFunction(() => {
+    return document.readyState === 'interactive' || document.readyState === 'complete';
+  }, { timeout: 5000 }).catch(() => {
+    console.log(`[${requestId}] 基本DOM等待超时`);
+  });
+
+  // 短暂等待让页面稳定
+  await page.waitForTimeout(1000);
+}
+
+// 标准内容等待（中等复杂度网站）
+async function waitForStandardContent(page, requestId) {
+  console.log(`[${requestId}] 标准内容等待策略`);
+
+  // 等待DOM完全加载
+  await page.waitForFunction(() => {
+    return document.readyState === 'complete';
+  }, { timeout: 8000 }).catch(() => {
+    console.log(`[${requestId}] DOM完全加载等待超时`);
+  });
+
+  // 等待关键图片加载
+  await page.waitForFunction(() => {
+    const images = Array.from(document.images);
+    const criticalImages = images.slice(0, 3); // 只等待前3张图片
+    return criticalImages.length === 0 || criticalImages.every(img => img.complete);
+  }, { timeout: 5000 }).catch(() => {
+    console.log(`[${requestId}] 关键图片加载等待超时`);
+  });
+
+  // 适度等待时间
+  await page.waitForTimeout(2000);
+}
+
+// 完整内容等待（简单网站）
+async function waitForFullContent(page, requestId) {
+  console.log(`[${requestId}] 完整内容等待策略`);
+
+  // 等待DOM完全加载
+  await page.waitForFunction(() => {
+    return document.readyState === 'complete';
+  }, { timeout: 10000 }).catch(() => {
+    console.log(`[${requestId}] DOM完全加载等待超时`);
+  });
+
+  // 等待所有图片加载
+  await page.waitForFunction(() => {
+    const images = Array.from(document.images);
+    return images.every(img => img.complete && img.naturalHeight !== 0);
+  }, { timeout: 8000 }).catch(() => {
+    console.log(`[${requestId}] 图片加载等待超时`);
+  });
+
+  // 完整等待时间
+  await page.waitForTimeout(3000);
 }
 
 // 快速现代前端框架等待策略（60秒限制优化版本）
@@ -1018,9 +1119,11 @@ app.post('/api/screenshot', async (req, res) => {
 
   console.log(`[${requestId}] URL格式化: ${inputUrl} -> ${url}`);
 
-  // 获取智能超时配置
-  const timeoutConfig = getTimeoutConfig(url);
-  console.log(`[${requestId}] 超时配置:`, timeoutConfig);
+  // 获取 Hobby 计划配置
+  const config = getHobbyPlanConfig(url);
+  const siteComplexity = detectSiteComplexity(url);
+  console.log(`[${requestId}] 网站复杂度:`, siteComplexity);
+  console.log(`[${requestId}] Hobby 计划配置:`, config);
 
   // 设置总体执行时间限制
   const executionTimer = setTimeout(() => {
@@ -1028,7 +1131,7 @@ app.post('/api/screenshot', async (req, res) => {
     if (browser) {
       browser.close().catch(() => {});
     }
-  }, timeoutConfig.maxExecutionTime);
+  }, config.maxExecutionTime);
 
   // 验证设备类型
   if (!deviceProfiles[device]) {
@@ -1055,21 +1158,19 @@ app.post('/api/screenshot', async (req, res) => {
     const executablePath = await getExecutablePath();
     console.log(`[${requestId}] 使用浏览器路径:`, executablePath);
 
-    // 使用内存优化的浏览器配置
-    const browserArgs = getMemoryOptimizedBrowserArgs(timeoutConfig.memory.optimization);
+    // 使用 Hobby 计划的激进内存优化配置
+    const browserArgs = getMemoryOptimizedBrowserArgs(config.memory.optimization);
 
-    console.log(`[${requestId}] 内存优化策略: ${timeoutConfig.memory.optimization}, 内存限制: ${timeoutConfig.memory.limit}MB`);
+    console.log(`[${requestId}] 内存优化策略: ${config.memory.optimization}, 内存限制: ${config.memory.limit}MB`);
 
     // Vercel 环境特殊配置
     if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
       browserArgs.push(...chromium.args);
       browserArgs.push('--disable-setuid-sandbox');
 
-      // 根据内存优化策略决定是否使用单进程
-      if (timeoutConfig.memory.optimization === 'aggressive') {
-        console.log(`[${requestId}] 使用单进程模式以节省内存`);
-        // 单进程模式已在 getMemoryOptimizedBrowserArgs 中添加
-      }
+      // Hobby 计划使用单进程模式以节省内存
+      console.log(`[${requestId}] 使用单进程模式以节省内存 (Hobby 计划优化)`);
+      // 单进程模式已在 getMemoryOptimizedBrowserArgs 中添加
     } else {
       // 本地环境可以使用多进程提高性能
       browserArgs.push('--disable-setuid-sandbox');
@@ -1144,54 +1245,66 @@ app.post('/api/screenshot', async (req, res) => {
       }
     });
 
-    // 使用智能超时配置
-    console.log(`[${requestId}] 使用导航超时: ${timeoutConfig.navigationTimeout}ms, 重试次数: ${timeoutConfig.retries}`);
+    // 使用 Hobby 计划的保守导航配置
+    console.log(`[${requestId}] 使用导航超时: ${config.navigationTimeout}ms, 重试次数: ${config.retries}`);
+
+    // 设置请求拦截以优化加载速度和减少内存使用
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const resourceType = req.resourceType();
+      const reqUrl = req.url();
+
+      // Hobby 计划的激进资源过滤
+      if (siteComplexity.complexity === 'high') {
+        // 高复杂度网站：只加载必要资源
+        if (resourceType === 'font' ||
+            resourceType === 'media' ||
+            resourceType === 'other' ||
+            reqUrl.includes('.mp4') ||
+            reqUrl.includes('.mp3') ||
+            reqUrl.includes('analytics') ||
+            reqUrl.includes('tracking')) {
+          req.abort();
+          return;
+        }
+      } else if (siteComplexity.complexity === 'medium') {
+        // 中等复杂度：过滤部分资源
+        if (resourceType === 'media' ||
+            reqUrl.includes('.mp4') ||
+            reqUrl.includes('analytics')) {
+          req.abort();
+          return;
+        }
+      }
+
+      req.continue();
+    });
 
     await retryOperation(async () => {
       await page.goto(url, {
-        waitUntil: ['networkidle2', 'domcontentloaded'],
-        timeout: timeoutConfig.navigationTimeout
+        waitUntil: ['domcontentloaded'], // 只等待DOM加载，不等待网络空闲
+        timeout: config.navigationTimeout
       });
-    }, timeoutConfig.retries, 3000);
+    }, config.retries, 2000);
 
-    console.log(`[${requestId}] 页面初始加载完成，开始智能等待策略: ${timeoutConfig.waitStrategy}`);
+    console.log(`[${requestId}] 页面初始加载完成，开始 Hobby 计划等待策略`);
 
-    // 根据配置使用不同的等待策略
-    let hasModernFramework = false;
+    // 使用 Hobby 计划专用的简化等待策略
+    const pageWaitSuccess = await waitForPageHobbyPlan(page, requestId, config, siteComplexity);
 
-    if (timeoutConfig.waitStrategy === 'enhanced') {
-      // 完整的现代前端框架等待策略
-      hasModernFramework = await waitForModernFramework(page, requestId);
-    } else if (timeoutConfig.waitStrategy === 'fast-enhanced') {
-      // 快速增强策略（60秒限制下的优化版本）
-      hasModernFramework = await waitForModernFrameworkFast(page, requestId);
-    } else {
-      // 标准策略
-      hasModernFramework = await waitForModernFramework(page, requestId);
-    }
-
-    if (!hasModernFramework) {
-      console.log(`[${requestId}] 未检测到现代框架，使用传统等待策略`);
-      // 传统网站的等待策略
-      await page.waitForTimeout(2000);
-
-      // 等待图片加载
-      await page.waitForFunction(() => {
-        const images = Array.from(document.images);
-        return images.every(img => img.complete);
-      }, { timeout: 8000 }).catch(() => {
-        console.log(`[${requestId}] 图片加载等待超时`);
-      });
+    if (!pageWaitSuccess) {
+      console.log(`[${requestId}] 页面等待策略失败，使用最小等待时间`);
+      await page.waitForTimeout(1000);
     }
 
     console.log(`[${requestId}] 页面完全加载完成`);
 
     // 页面加载后内存监控
     console.log(`[${requestId}] 页面加载后内存状态:`);
-    const memoryAfterLoad = getMemoryUsage(requestId);
+    getMemoryUsage(requestId);
 
     // 检查内存压力
-    if (checkMemoryPressure(requestId, timeoutConfig.memory.limit)) {
+    if (checkMemoryPressure(requestId, config.memory.limit)) {
       console.log(`[${requestId}] 检测到内存压力，尝试清理`);
       await forceGarbageCollection(requestId);
     }
@@ -1247,25 +1360,26 @@ app.post('/api/screenshot', async (req, res) => {
     console.log(`[${requestId}] 截图前内存状态:`);
     getMemoryUsage(requestId);
 
-    // 截取整个页面 - 根据内存优化调整参数
-    console.log(`[${requestId}] 开始截图，质量:`, quality);
+    // Hobby 计划专用截图配置 - 优先可靠性
+    console.log(`[${requestId}] 开始截图，质量:`, quality, `复杂度:`, siteComplexity.complexity);
 
     const screenshotOptions = {
       type: 'jpeg',
       quality: qualitySettings[quality],
       fullPage: true,
-      clip: null // 不裁剪，获取完整页面
+      optimizeForSpeed: true, // Hobby 计划始终启用速度优化
+      captureBeyondViewport: false, // 禁用视口外捕获以节省内存
+      clip: null
     };
 
-    // 根据内存优化策略调整截图参数
-    if (timeoutConfig.memory.optimization === 'aggressive') {
-      screenshotOptions.optimizeForSpeed = true; // 启用速度优化以减少内存使用
-      screenshotOptions.captureBeyondViewport = false; // 禁用视口外捕获以节省内存
-      console.log(`[${requestId}] 使用内存优化的截图参数`);
-    } else {
-      screenshotOptions.optimizeForSpeed = false; // 关闭速度优化以确保质量
-      screenshotOptions.captureBeyondViewport = true; // 捕获视口外内容
+    // 根据网站复杂度调整截图策略
+    if (siteComplexity.complexity === 'high') {
+      // 高复杂度网站：降低质量以确保成功
+      screenshotOptions.quality = Math.min(screenshotOptions.quality, 60);
+      console.log(`[${requestId}] 高复杂度网站，降低截图质量到 ${screenshotOptions.quality}`);
     }
+
+    console.log(`[${requestId}] 使用 Hobby 计划优化的截图参数:`, screenshotOptions);
 
     const screenshot = await page.screenshot(screenshotOptions);
 
@@ -1301,7 +1415,8 @@ app.post('/api/screenshot', async (req, res) => {
         requestId,
         duration,
         timestamp: new Date().toISOString(),
-        hasModernFramework,
+        plan: 'hobby',
+        siteComplexity: siteComplexity.complexity,
         pageMetrics: {
           actualHeight: pageMetrics.height,
           viewportHeight: pageMetrics.viewportHeight,
@@ -1309,7 +1424,13 @@ app.post('/api/screenshot', async (req, res) => {
         },
         performance: {
           screenshotSize: Math.round(screenshot.length / 1024) + 'KB',
-          loadingStrategy: hasModernFramework ? 'modern-framework' : 'traditional'
+          loadingStrategy: 'hobby-optimized',
+          memoryOptimization: 'aggressive'
+        },
+        hobbyPlanOptimizations: {
+          resourceFiltering: siteComplexity.complexity === 'high',
+          qualityReduction: siteComplexity.complexity === 'high',
+          speedOptimization: true
         }
       }
     });
@@ -1324,26 +1445,40 @@ app.post('/api/screenshot', async (req, res) => {
     console.error(`[${requestId}] 截图生成错误 (耗时: ${duration}ms):`, error);
     console.error(`[${requestId}] 错误堆栈:`, error.stack);
 
-    // 根据错误类型返回不同的错误信息
+    // Hobby 计划专用错误处理和诊断
     let errorMessage = '截图生成失败';
     let errorTip = '请检查网络连接和URL是否正确';
+    let errorCategory = 'unknown';
 
+    // 详细的错误分类和处理
     if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+      errorCategory = 'timeout';
       errorMessage = '页面加载超时';
-      if (duration >= timeoutConfig.maxExecutionTime - 5000) {
-        errorTip = `当前计划限制执行时间为${Math.round(timeoutConfig.maxExecutionTime/1000)}秒，该网站需要更长时间渲染。建议升级到Pro计划以获得更长的执行时间。`;
+      if (duration >= config.maxExecutionTime - 5000) {
+        errorTip = `Hobby 计划限制执行时间为 ${Math.round(config.maxExecutionTime/1000)} 秒。该网站可能过于复杂，建议：1) 稍后重试 2) 升级到 Pro 计划获得更长执行时间`;
       } else {
-        errorTip = '目标网页响应较慢，请稍后重试或检查网址是否正确';
+        errorTip = '目标网页响应较慢。建议：1) 检查网址是否正确 2) 稍后重试 3) 该网站可能不适合在免费计划下截图';
       }
     } else if (error.message.includes('net::ERR_') || error.message.includes('Navigation failed')) {
+      errorCategory = 'network';
       errorMessage = '无法访问目标网页';
-      errorTip = '请检查网址是否正确，或目标网站是否可访问';
+      errorTip = '网络连接问题。请检查：1) 网址是否正确 2) 网站是否可访问 3) 是否存在地域限制';
     } else if (error.message.includes('Protocol error') || error.message.includes('Target closed')) {
+      errorCategory = 'browser';
       errorMessage = '浏览器连接异常';
-      errorTip = '服务器繁忙，请稍后重试';
+      errorTip = 'Hobby 计划内存限制可能导致浏览器异常。建议：1) 稍后重试 2) 尝试更简单的网站 3) 升级到 Pro 计划';
+    } else if (error.message.includes('Memory') || error.message.includes('memory')) {
+      errorCategory = 'memory';
+      errorMessage = '内存不足';
+      errorTip = 'Hobby 计划内存限制 (1024MB) 不足以处理该网站。建议：1) 升级到 Pro 计划 (3008MB) 2) 尝试更简单的网站';
     } else if (error.message.includes('无法获取浏览器路径')) {
+      errorCategory = 'system';
       errorMessage = '浏览器初始化失败';
       errorTip = '服务器配置问题，请联系管理员';
+    } else if (error.message.includes('Cannot read properties of null')) {
+      errorCategory = 'page_error';
+      errorMessage = '页面脚本错误';
+      errorTip = '目标网站存在脚本错误。这在复杂网站中很常见，Hobby 计划已尽力处理，建议升级到 Pro 计划获得更好的兼容性';
     }
 
     res.status(500).json({
@@ -1352,10 +1487,20 @@ app.post('/api/screenshot', async (req, res) => {
       tip: errorTip,
       requestId,
       duration,
+      errorCategory,
+      siteComplexity: siteComplexity?.complexity || 'unknown',
       planInfo: {
-        currentPlan: process.env.VERCEL_PLAN || 'hobby',
-        maxExecutionTime: Math.round(timeoutConfig.maxExecutionTime/1000) + 's',
+        currentPlan: 'hobby',
+        maxExecutionTime: Math.round(config.maxExecutionTime/1000) + 's',
+        memoryLimit: config.memory.limit + 'MB',
         upgradeUrl: 'https://vercel.com/pricing'
+      },
+      debugging: {
+        url: url,
+        userAgent: 'Chrome/120.0.0.0',
+        memoryOptimization: 'aggressive',
+        resourceFiltering: siteComplexity?.complexity === 'high',
+        errorStack: error.stack?.split('\n').slice(0, 5) // 只返回前5行堆栈
       }
     });
   } finally {

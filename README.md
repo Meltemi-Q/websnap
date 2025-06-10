@@ -64,7 +64,38 @@ npm run plan:pro
 # 直接部署指定计划
 npm run deploy:hobby
 npm run deploy:pro
+
+# 测试和诊断
+npm run test:hobby      # 测试 Hobby 计划性能
+npm run test:problems   # 测试问题网站
+node diagnose-500-errors.js  # 诊断 500 错误
 ```
+
+## 🛠️ 故障排除
+
+### 500 Internal Server Error
+如果遇到 500 错误，请按以下步骤排查：
+
+1. **运行诊断工具**
+   ```bash
+   node diagnose-500-errors.js
+   ```
+
+2. **检查网站复杂度**
+   - 简单网站 (example.com): 应该正常工作
+   - 复杂网站 (qq.com, islanddragon.cn): 可能需要特殊处理
+
+3. **常见错误类型**
+   - `timeout`: 页面加载超时，建议升级到 Pro 计划
+   - `memory`: 内存不足，Hobby 计划限制 1024MB
+   - `browser`: 浏览器异常，通常由内存限制引起
+   - `page_error`: 页面脚本错误，复杂网站常见
+
+### Hobby 计划优化策略
+- ✅ **激进资源过滤**: 禁用字体、媒体、分析脚本
+- ✅ **单进程模式**: 减少内存占用
+- ✅ **速度优化**: 优先速度而非质量
+- ✅ **降级处理**: 复杂网站自动降低质量
 
 ## 本地开发
 

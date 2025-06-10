@@ -12,6 +12,8 @@
     "plan:hobby": "node switch-plan.js hobby",
     "plan:pro": "node switch-plan.js pro",
     "test:memory": "node test-memory-optimization.js",
+    "test:hobby": "node test-hobby-plan.js",
+    "test:problems": "node test-hobby-plan.js",
     "deploy": "vercel --prod",
     "deploy:hobby": "npm run plan:hobby && npm run deploy",
     "deploy:pro": "npm run plan:pro && npm run deploy"
