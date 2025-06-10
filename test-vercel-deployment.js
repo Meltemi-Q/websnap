@@ -4,8 +4,9 @@ const fetch = require('node-fetch');
 const VERCEL_URL = process.env.VERCEL_URL || 'https://your-app.vercel.app';
 
 async function testVercelDeployment() {
-    console.log('🚀 开始测试Vercel部署...\n');
-    console.log(`测试URL: ${VERCEL_URL}\n`);
+    console.log('🚀 Testing Vercel Deployment (Modern Configuration)...\n');
+    console.log(`Test URL: ${VERCEL_URL}\n`);
+    console.log('✅ Configuration: Modern format (functions + rewrites)');
     
     const testCases = [
         {
