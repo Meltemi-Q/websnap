@@ -1,6 +1,6 @@
 {
   "functions": {
-    "api/screenshot.js": {
+    "api/screenshot-production.js": {
       "maxDuration": 60,
       "memory": 1024,
       "includeFiles": "node_modules/@sparticuz/chromium/**"
@@ -9,11 +9,11 @@
   "rewrites": [
     {
       "source": "/api/screenshot",
-      "destination": "/api/screenshot.js"
+      "destination": "/api/screenshot-production.js"
     },
     {
       "source": "/api/health",
-      "destination": "/api/screenshot.js"
+      "destination": "/api/screenshot-production.js"
     }
   ],
   "headers": [

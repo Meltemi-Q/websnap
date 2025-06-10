@@ -14,7 +14,9 @@
     "test:memory": "node test-memory-optimization.js",
     "test:hobby": "node test-hobby-plan.js",
     "test:problems": "node test-hobby-plan.js",
+    "verify": "node verify-deployment.js",
     "deploy": "vercel --prod",
+    "deploy:safe": "npm run verify && npm run deploy",
     "deploy:hobby": "npm run plan:hobby && npm run deploy",
     "deploy:pro": "npm run plan:pro && npm run deploy"
   },
