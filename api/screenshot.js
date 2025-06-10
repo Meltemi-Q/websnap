@@ -1,6 +1,7 @@
 const express = require('express');
 const puppeteer = require('puppeteer-core');
 const chromium = require('@sparticuz/chromium');
+const path = require('path');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -23,6 +24,41 @@ const qualitySettings = {
 chromium.setGraphicsMode = false; // 禁用图形模式
 
 app.use(express.json());
+
+// 静态文件服务
+app.use(express.static(path.join(__dirname, '../public')));
+
+// 根路径路由
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
+// 获取Chrome可执行路径的函数
+async function getExecutablePath() {
+  // 如果是Vercel环境，使用Chromium
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return await chromium.executablePath();
+  }
+  
+  // 本地开发环境，尝试寻找本地Chrome
+  const localPaths = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser'
+  ];
+  
+  const fs = require('fs');
+  for (const chromePath of localPaths) {
+    if (fs.existsSync(chromePath)) {
+      return chromePath;
+    }
+  }
+  
+  // 如果找不到本地Chrome，回退到Chromium
+  return await chromium.executablePath();
+}
 
 app.post('/api/screenshot', async (req, res) => {
   const { url, device = 'desktop', quality = 'medium' } = req.body;
@@ -47,17 +83,30 @@ app.post('/api/screenshot', async (req, res) => {
   let browser;
   
   try {
-    // 启动浏览器（Vercel优化配置）
+    const executablePath = await getExecutablePath();
+    console.log('使用浏览器路径:', executablePath);
+    
+    // 启动浏览器配置
+    const browserArgs = [
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+      '--disable-dev-shm-usage',
+      '--no-sandbox',
+      '--disable-web-security',
+      '--disable-extensions',
+      '--disable-plugins',
+      '--disable-images', // 可选：禁用图片加载以提升性能
+    ];
+    
+    // 如果是Vercel环境，添加Chromium特定参数
+    if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+      browserArgs.push(...chromium.args);
+    }
+    
     browser = await puppeteer.launch({
-      args: [
-        ...chromium.args,
-        '--disable-gpu',
-        '--disable-software-rasterizer',
-        '--disable-dev-shm-usage',
-        '--no-sandbox'
-      ],
-      executablePath: process.env.CHROMIUM_EXECUTABLE_PATH || await chromium.executablePath(),
-      headless: chromium.headless,
+      args: browserArgs,
+      executablePath: executablePath,
+      headless: process.env.VERCEL ? chromium.headless : true,
       ignoreHTTPSErrors: true
     });
     
@@ -114,7 +163,7 @@ app.post('/api/screenshot', async (req, res) => {
     res.status(500).json({ 
       error: '截图生成失败',
       details: error.message,
-      tip: '如果首次部署，可能需要等待Chromium初始化完成'
+      tip: '请确保系统已安装Chrome浏览器或网络连接正常'
     });
   } finally {
     if (browser) {

@@ -5,6 +5,8 @@
   "main": "api/screenshot.js",
   "scripts": {
     "start": "node api/screenshot.js",
+    "test": "node api/screenshot.js",
+    "dev": "node api/screenshot.js",
     "vercel-build": "echo 'Vercel build script: no build needed'"
   },
   "dependencies": {
@@ -14,5 +16,8 @@
   },
   "engines": {
     "node": "18.x"
-  }
+  },
+  "keywords": ["screenshot", "puppeteer", "websnap", "webpage"],
+  "author": "WebSnap Team",
+  "license": "MIT"
 }
