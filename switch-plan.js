@@ -13,13 +13,15 @@ const CONFIGS = {
     file: 'vercel-config.json',
     description: 'Hobby Plan (免费)',
     maxDuration: 60,
-    features: ['基础网站截图', '60秒执行限制', '快速渲染模式']
+    memory: 1024,
+    features: ['基础网站截图', '60秒执行限制', '1024MB内存限制', '激进内存优化', '快速渲染模式']
   },
   pro: {
     file: 'vercel-pro.json',
     description: 'Pro Plan ($20/月)',
     maxDuration: 120,
-    features: ['完整网站截图', '120秒执行限制', '增强渲染模式', '复杂网站支持']
+    memory: 3008,
+    features: ['完整网站截图', '120秒执行限制', '3008MB内存限制', '平衡内存优化', '增强渲染模式', '复杂网站支持']
   }
 };
 
@@ -31,6 +33,7 @@ function showUsage() {
   Object.entries(CONFIGS).forEach(([plan, config]) => {
     console.log(`  ${plan.padEnd(8)} - ${config.description}`);
     console.log(`             最大执行时间: ${config.maxDuration}秒`);
+    console.log(`             内存限制: ${config.memory}MB`);
     config.features.forEach(feature => {
       console.log(`             • ${feature}`);
     });
@@ -54,10 +57,11 @@ function getCurrentPlan() {
   try {
     const config = JSON.parse(fs.readFileSync(vercelJsonPath, 'utf8'));
     const maxDuration = config.functions?.['api/screenshot.js']?.maxDuration;
-    
-    if (maxDuration === 60) return 'hobby';
-    if (maxDuration === 120) return 'pro';
-    
+    const memory = config.functions?.['api/screenshot.js']?.memory;
+
+    if (maxDuration === 60 && memory === 1024) return 'hobby';
+    if (maxDuration === 120 && memory === 3008) return 'pro';
+
     return 'unknown';
   } catch (error) {
     return 'error';
@@ -87,6 +91,7 @@ function showStatus() {
   const config = CONFIGS[currentPlan];
   console.log(`✅ 当前计划: ${config.description}`);
   console.log(`⏱️  最大执行时间: ${config.maxDuration}秒`);
+  console.log(`💾 内存限制: ${config.memory}MB`);
   console.log(`🚀 功能特性:`);
   config.features.forEach(feature => {
     console.log(`   • ${feature}`);
@@ -136,6 +141,7 @@ function switchToPlan(targetPlan) {
     
     console.log(`\n✅ 成功切换到 ${config.description}\n`);
     console.log(`⏱️  最大执行时间: ${config.maxDuration}秒`);
+    console.log(`💾 内存限制: ${config.memory}MB`);
     console.log(`🚀 功能特性:`);
     config.features.forEach(feature => {
       console.log(`   • ${feature}`);

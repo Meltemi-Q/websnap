@@ -27,7 +27,7 @@ chromium.setGraphicsMode = false; // 禁用图形模式
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// 智能超时配置系统
+// 智能超时和内存配置系统
 function getTimeoutConfig(url) {
   const isVercel = process.env.VERCEL === '1';
   const vercelPlan = process.env.VERCEL_PLAN || 'hobby'; // hobby, pro, enterprise
@@ -42,7 +42,13 @@ function getTimeoutConfig(url) {
     // 等待策略
     waitStrategy: 'standard',
     // 重试次数
-    retries: 2
+    retries: 2,
+    // 内存配置
+    memory: {
+      limit: vercelPlan === 'hobby' ? 1024 : 3008,
+      // 内存优化策略
+      optimization: vercelPlan === 'hobby' ? 'aggressive' : 'balanced'
+    }
   };
 
   if (isTargetSite) {
@@ -60,6 +66,80 @@ function getTimeoutConfig(url) {
   }
 
   return config;
+}
+
+// 内存优化的浏览器配置
+function getMemoryOptimizedBrowserArgs(memoryOptimization = 'balanced') {
+  const baseArgs = [
+    // 基础稳定性配置
+    '--disable-gpu',
+    '--disable-software-rasterizer',
+    '--disable-dev-shm-usage',
+    '--no-sandbox',
+    '--disable-web-security',
+    '--disable-extensions',
+    '--disable-plugins',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--disable-background-networking',
+    '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+    '--disable-ipc-flooding-protection',
+    '--disable-hang-monitor',
+    '--disable-client-side-phishing-detection',
+    '--disable-component-update',
+    '--disable-domain-reliability'
+  ];
+
+  if (memoryOptimization === 'aggressive') {
+    // Hobby计划的激进内存优化
+    return baseArgs.concat([
+      // 内存限制
+      '--memory-pressure-off',
+      '--max_old_space_size=512',
+      '--js-flags=--max-old-space-size=512',
+
+      // 禁用更多功能以节省内存
+      '--disable-background-mode',
+      '--disable-background-timer-throttling',
+      '--disable-renderer-backgrounding',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-features=VizDisplayCompositor,AudioServiceOutOfProcess',
+      '--disable-audio-output',
+      '--disable-audio-input',
+      '--disable-notifications',
+      '--disable-speech-api',
+      '--disable-file-system',
+      '--disable-sensors',
+      '--disable-geolocation',
+      '--disable-permissions-api',
+
+      // 减少缓存和历史记录
+      '--disk-cache-size=0',
+      '--media-cache-size=0',
+      '--aggressive-cache-discard',
+      '--disable-application-cache',
+
+      // 单进程模式（节省内存但可能影响性能）
+      '--single-process',
+
+      // 减少渲染质量以节省内存
+      '--disable-lcd-text',
+      '--disable-accelerated-2d-canvas',
+      '--disable-accelerated-jpeg-decoding',
+      '--disable-accelerated-mjpeg-decode',
+      '--disable-accelerated-video-decode'
+    ]);
+  } else {
+    // Pro计划的平衡配置
+    return baseArgs.concat([
+      '--js-flags=--max-old-space-size=2048',
+      '--max_old_space_size=2048',
+      '--enable-features=NetworkService,NetworkServiceLogging',
+      '--disable-features=VizDisplayCompositor',
+      '--force-color-profile=srgb'
+    ]);
+  }
 }
 
 // 静态文件服务
@@ -112,6 +192,46 @@ async function getExecutablePath() {
     console.error('获取浏览器路径失败:', error);
     throw new Error(`无法获取浏览器路径: ${error.message}`);
   }
+}
+
+// 内存监控函数
+function getMemoryUsage(requestId) {
+  const usage = process.memoryUsage();
+  const formatMB = (bytes) => Math.round(bytes / 1024 / 1024);
+
+  const memoryInfo = {
+    rss: formatMB(usage.rss),
+    heapUsed: formatMB(usage.heapUsed),
+    heapTotal: formatMB(usage.heapTotal),
+    external: formatMB(usage.external)
+  };
+
+  console.log(`[${requestId}] 内存使用: RSS=${memoryInfo.rss}MB, Heap=${memoryInfo.heapUsed}/${memoryInfo.heapTotal}MB, External=${memoryInfo.external}MB`);
+
+  return memoryInfo;
+}
+
+// 内存清理函数
+async function forceGarbageCollection(requestId) {
+  if (global.gc) {
+    console.log(`[${requestId}] 执行垃圾回收`);
+    global.gc();
+  } else {
+    console.log(`[${requestId}] 垃圾回收不可用`);
+  }
+}
+
+// 内存压力检测
+function checkMemoryPressure(requestId, memoryLimit = 1024) {
+  const usage = getMemoryUsage(requestId);
+  const pressureThreshold = memoryLimit * 0.8; // 80% 阈值
+
+  if (usage.rss > pressureThreshold) {
+    console.log(`[${requestId}] ⚠️ 内存压力警告: ${usage.rss}MB/${memoryLimit}MB (${Math.round(usage.rss/memoryLimit*100)}%)`);
+    return true;
+  }
+
+  return false;
 }
 
 // 重试函数
@@ -925,67 +1045,31 @@ app.post('/api/screenshot', async (req, res) => {
   }
 
   let browser;
-  
+
   try {
+    // 初始内存监控
+    console.log(`[${requestId}] 开始处理，初始内存状态:`);
+    getMemoryUsage(requestId);
+
     console.log(`[${requestId}] 开始获取浏览器路径`);
     const executablePath = await getExecutablePath();
     console.log(`[${requestId}] 使用浏览器路径:`, executablePath);
 
-    // 针对现代前端应用优化的浏览器配置
-    const browserArgs = [
-      // 基础稳定性配置
-      '--disable-gpu',
-      '--disable-software-rasterizer',
-      '--disable-dev-shm-usage',
-      '--no-sandbox',
-      '--disable-web-security',
-      '--disable-extensions',
-      '--disable-plugins',
+    // 使用内存优化的浏览器配置
+    const browserArgs = getMemoryOptimizedBrowserArgs(timeoutConfig.memory.optimization);
 
-      // 性能优化配置
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--disable-background-networking',
-      '--disable-features=TranslateUI,BlinkGenPropertyTrees',
-      '--disable-ipc-flooding-protection',
-      '--disable-hang-monitor',
-      '--disable-client-side-phishing-detection',
-      '--disable-component-update',
-      '--disable-domain-reliability',
-
-      // 现代前端应用支持
-      '--enable-features=NetworkService,NetworkServiceLogging',
-      '--disable-features=VizDisplayCompositor',
-      '--force-color-profile=srgb',
-      '--disable-lcd-text',
-
-      // JavaScript 和渲染优化
-      '--js-flags=--max-old-space-size=4096',
-      '--max_old_space_size=4096',
-      '--disable-v8-idle-tasks',
-      '--disable-background-timer-throttling',
-
-      // 网络和资源加载优化
-      '--aggressive-cache-discard',
-      '--disable-background-networking',
-      '--disable-default-apps',
-      '--disable-popup-blocking',
-      '--disable-prompt-on-repost',
-      '--disable-sync',
-      '--metrics-recording-only',
-      '--no-pings',
-      '--no-default-browser-check',
-      '--no-first-run',
-      '--password-store=basic',
-      '--use-mock-keychain'
-    ];
+    console.log(`[${requestId}] 内存优化策略: ${timeoutConfig.memory.optimization}, 内存限制: ${timeoutConfig.memory.limit}MB`);
 
     // Vercel 环境特殊配置
     if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
       browserArgs.push(...chromium.args);
       browserArgs.push('--disable-setuid-sandbox');
-      browserArgs.push('--single-process'); // 云环境使用单进程
+
+      // 根据内存优化策略决定是否使用单进程
+      if (timeoutConfig.memory.optimization === 'aggressive') {
+        console.log(`[${requestId}] 使用单进程模式以节省内存`);
+        // 单进程模式已在 getMemoryOptimizedBrowserArgs 中添加
+      }
     } else {
       // 本地环境可以使用多进程提高性能
       browserArgs.push('--disable-setuid-sandbox');
@@ -1005,7 +1089,11 @@ app.post('/api/screenshot', async (req, res) => {
     }, 3, 2000);
 
     console.log(`[${requestId}] 浏览器启动成功`);
-    
+
+    // 浏览器启动后内存监控
+    console.log(`[${requestId}] 浏览器启动后内存状态:`);
+    getMemoryUsage(requestId);
+
     console.log(`[${requestId}] 创建新页面`);
     const page = await browser.newPage();
 
@@ -1098,6 +1186,16 @@ app.post('/api/screenshot', async (req, res) => {
 
     console.log(`[${requestId}] 页面完全加载完成`);
 
+    // 页面加载后内存监控
+    console.log(`[${requestId}] 页面加载后内存状态:`);
+    const memoryAfterLoad = getMemoryUsage(requestId);
+
+    // 检查内存压力
+    if (checkMemoryPressure(requestId, timeoutConfig.memory.limit)) {
+      console.log(`[${requestId}] 检测到内存压力，尝试清理`);
+      await forceGarbageCollection(requestId);
+    }
+
     // 获取页面真实高度 - 针对现代前端应用优化
     console.log(`[${requestId}] 获取页面高度`);
     const pageMetrics = await page.evaluate(() => {
@@ -1145,18 +1243,37 @@ app.post('/api/screenshot', async (req, res) => {
     // 最后一次等待确保所有内容渲染完成
     await page.waitForTimeout(1000);
 
-    // 截取整个页面 - 优化截图参数
+    // 截图前内存监控
+    console.log(`[${requestId}] 截图前内存状态:`);
+    getMemoryUsage(requestId);
+
+    // 截取整个页面 - 根据内存优化调整参数
     console.log(`[${requestId}] 开始截图，质量:`, quality);
-    const screenshot = await page.screenshot({
+
+    const screenshotOptions = {
       type: 'jpeg',
       quality: qualitySettings[quality],
       fullPage: true,
-      optimizeForSpeed: false, // 关闭速度优化以确保质量
-      captureBeyondViewport: true, // 捕获视口外内容
       clip: null // 不裁剪，获取完整页面
-    });
-    
+    };
+
+    // 根据内存优化策略调整截图参数
+    if (timeoutConfig.memory.optimization === 'aggressive') {
+      screenshotOptions.optimizeForSpeed = true; // 启用速度优化以减少内存使用
+      screenshotOptions.captureBeyondViewport = false; // 禁用视口外捕获以节省内存
+      console.log(`[${requestId}] 使用内存优化的截图参数`);
+    } else {
+      screenshotOptions.optimizeForSpeed = false; // 关闭速度优化以确保质量
+      screenshotOptions.captureBeyondViewport = true; // 捕获视口外内容
+    }
+
+    const screenshot = await page.screenshot(screenshotOptions);
+
     console.log(`[${requestId}] 截图完成，大小:`, Math.round(screenshot.length / 1024), 'KB');
+
+    // 截图后内存监控
+    console.log(`[${requestId}] 截图后内存状态:`);
+    getMemoryUsage(requestId);
 
     // 将截图转换为Base64
     const base64Image = screenshot.toString('base64');
